@@ -1,0 +1,13 @@
+{
+  "projects": [
+    {
+      "id": "ddc86d34-629d-4922-acd6-9be35c48953d",
+      "name": "test",
+      "status": "active",
+      "created_at": "2025-08-19T00:22:32.156960",
+      "updated_at": "2025-08-19T00:22:32.156960"
+    }
+  ],
+  "total_count": 1,
+  "last_updated": "2025-08-19T00:22:32.157960"
+}
