@@ -66,7 +66,7 @@ const ProjectManagement: React.FC = () => {
       setLoading(true);
       const response = await fetch('/api/projects/');
       const data = await response.json();
-      setProjects(data || []);
+      setProjects(data.projects || []);
     } catch (error) {
       message.error('获取项目列表失败');
       console.error('Error fetching projects:', error);

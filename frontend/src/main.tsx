@@ -21,7 +21,7 @@ const darkTheme = {
   },
   components: {
     Layout: {
-      bodyBg: '#141414',
+      bodyBg: '#111827', // 与 Tailwind bg-gray-900 保持一致
       headerBg: '#1f2937',
       siderBg: '#1f2937',
     },

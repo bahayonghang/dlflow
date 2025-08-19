@@ -9,7 +9,7 @@
   --success-color: #52c41a;
   --warning-color: #faad14;
   --error-color: #ff4d4f;
-  --bg-dark: #141414;
+  --bg-dark: #111827; /* 与 Tailwind bg-gray-900 保持一致 */
   --bg-gray-800: #1f2937;
   --bg-gray-700: #374151;
   --bg-gray-600: #4b5563;
