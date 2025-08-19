@@ -8,6 +8,9 @@ import path from 'path';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth';
 import projectRoutes from './routes/projects';
+import workflowRoutes from './routes/workflows';
+import executionRoutes from './routes/executions';
+import nodeTypeRoutes from './routes/node-types';
 
 // __dirname is available in CommonJS mode
 
@@ -26,6 +29,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
  */
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/api/workflows', workflowRoutes);
+app.use('/api/executions', executionRoutes);
+app.use('/api/node-types', nodeTypeRoutes);
 
 /**
  * health

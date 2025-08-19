@@ -60,7 +60,7 @@ dev:
     @echo "💡 提示：使用 Ctrl+C 停止所有服务"
     @echo ""
     # 使用 concurrently 同时启动前后端服务
-    npx concurrently --kill-others --prefix-colors "cyan,magenta" --names "API,Frontend" "cd api && npm run dev" "cd frontend && npm run dev"
+    npx concurrently --kill-others --prefix-colors "cyan,magenta" --names "API,Frontend" "cd backend/api && npm run dev" "cd frontend && npm run dev"
 
 # 🎨 启动前端开发服务器
 frontend:
@@ -75,7 +75,7 @@ api:
     @echo "🌐 后端地址: http://localhost:3001"
     @echo "📖 API健康检查: http://localhost:3001/api/health"
     @echo "💡 提示：使用 Ctrl+C 停止服务"
-    cd api && npm run dev
+    cd backend/api && npm run dev
 
 # 🐍 启动Python后端服务器（备用）
 backend:
