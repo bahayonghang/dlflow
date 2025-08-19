@@ -24,7 +24,6 @@ import type { Node } from 'reactflow';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
-const { Panel } = Collapse;
 const { TextArea } = Input;
 
 interface PropertyPanelProps {

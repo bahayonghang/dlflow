@@ -6,13 +6,10 @@ import express, { type Request, type Response, type NextFunction }  from 'expres
 import cors from 'cors';
 import path from 'path';
 import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import authRoutes from './routes/auth.js';
-import projectRoutes from './routes/projects.js';
+import authRoutes from './routes/auth';
+import projectRoutes from './routes/projects';
 
-// for esm mode
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// __dirname is available in CommonJS mode
 
 // load env
 dotenv.config();

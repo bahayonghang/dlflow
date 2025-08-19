@@ -11,7 +11,6 @@ import {
   LineChartOutlined
 } from '@ant-design/icons';
 
-const { Panel } = Collapse;
 const { Text } = Typography;
 const { Search } = Input;
 
@@ -162,21 +161,19 @@ const NodeLibrary: React.FC = () => {
         defaultActiveKey={['input', 'transform', 'analysis', 'output']}
         ghost
         className="dark-collapse"
-      >
-        {nodeCategories.map(category => (
-          <Panel
-            key={category.key}
-            header={
-              <div className="flex items-center space-x-2">
-                <span className="text-blue-400">{category.icon}</span>
-                <span className="text-white font-medium">{category.label}</span>
-                <Tag className="ml-auto">
-                  {category.nodes.length}
-                </Tag>
-              </div>
-            }
-            className="border-gray-700"
-          >
+        items={nodeCategories.map(category => ({
+          key: category.key,
+          label: (
+            <div className="flex items-center space-x-2">
+              <span className="text-blue-400">{category.icon}</span>
+              <span className="text-white font-medium">{category.label}</span>
+              <Tag className="ml-auto">
+                {category.nodes.length}
+              </Tag>
+            </div>
+          ),
+          className: "border-gray-700",
+          children: (
             <div className="space-y-2">
               {category.nodes.map(node => (
                 <Card
@@ -225,9 +222,9 @@ const NodeLibrary: React.FC = () => {
                 </div>
               )}
             </div>
-          </Panel>
-        ))}
-      </Collapse>
+          )
+        }))}
+      />
 
       {/* 使用提示 */}
       <Card size="small" className="bg-blue-900 border-blue-700">

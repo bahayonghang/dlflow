@@ -53,16 +53,14 @@ install-be:
 # 🚀 同时启动前端和后端服务
 dev:
     @echo "🚀 正在启动 DLFlow 开发环境..."
-    @echo "🎨 启动前端服务器 (http://localhost:5173)"
-    @echo "🐍 启动后端服务器 (http://localhost:8000)"
-    @echo "📖 API文档地址: http://localhost:8000/docs"
+    @echo "🎨 前端服务器: http://localhost:5173"
+    @echo "🔧 后端API服务器: http://localhost:3001"
+    @echo "📖 API健康检查: http://localhost:3001/api/health"
     @echo ""
-    @echo "💡 提示：使用 Ctrl+C 停止服务"
+    @echo "💡 提示：使用 Ctrl+C 停止所有服务"
     @echo ""
-    # 使用 PowerShell 的 Start-Job 在后台启动后端
-    powershell -Command "Start-Job -ScriptBlock { Set-Location 'api'; npm run dev } | Out-Null"
-    # 启动前端（前台运行）
-    cd frontend; npm run dev
+    # 使用 concurrently 同时启动前后端服务
+    npx concurrently --kill-others --prefix-colors "cyan,magenta" --names "API,Frontend" "cd api && npm run dev" "cd frontend && npm run dev"
 
 # 🎨 启动前端开发服务器
 frontend:
@@ -71,9 +69,17 @@ frontend:
     @echo "💡 提示：使用 Ctrl+C 停止服务"
     cd frontend && npm run dev
 
-# 🐍 启动后端API服务器
+# 🔧 启动后端API服务器
+api:
+    @echo "🔧 正在启动后端API服务器..."
+    @echo "🌐 后端地址: http://localhost:3001"
+    @echo "📖 API健康检查: http://localhost:3001/api/health"
+    @echo "💡 提示：使用 Ctrl+C 停止服务"
+    cd api && npm run dev
+
+# 🐍 启动Python后端服务器（备用）
 backend:
-    @echo "🐍 正在启动后端API服务器..."
+    @echo "🐍 正在启动Python后端服务器..."
     @echo "🌐 后端地址: http://localhost:8000"
     @echo "📖 API文档: http://localhost:8000/docs"
     @echo "💡 提示：使用 Ctrl+C 停止服务"
@@ -115,8 +121,9 @@ status:
     @echo ""
     @echo "🌐 服务端口："
     @echo "  🎨 前端: http://localhost:5173"
-    @echo "  🐍 后端: http://localhost:8000"
-    @echo "  📖 API文档: http://localhost:8000/docs"
+    @echo "  🔧 API服务器: http://localhost:3001"
+    @echo "  🐍 Python后端: http://localhost:8000 (备用)"
+    @echo "  📖 API健康检查: http://localhost:3001/api/health"
 
 # 📖 显示详细帮助信息
 help:
