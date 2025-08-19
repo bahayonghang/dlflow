@@ -60,7 +60,7 @@ dev:
     @echo "💡 提示：使用 Ctrl+C 停止服务"
     @echo ""
     # 使用 PowerShell 的 Start-Job 在后台启动后端
-    powershell -Command "Start-Job -ScriptBlock { Set-Location 'backend'; uv run python main.py } | Out-Null"
+    powershell -Command "Start-Job -ScriptBlock { Set-Location 'api'; npm run dev } | Out-Null"
     # 启动前端（前台运行）
     cd frontend; npm run dev
 

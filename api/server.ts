@@ -6,9 +6,9 @@ import app from './app.js';
 /**
  * start server with port
  */
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 8765;
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, '127.0.0.1', () => {
   console.log(`Server ready on port ${PORT}`);
 });
 
