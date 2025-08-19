@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Layout,
   Button,
@@ -10,7 +10,9 @@ import {
   Space,
   Divider,
   Tag,
-  Progress
+  Progress,
+  Spin,
+  Alert
 } from 'antd';
 import {
   UploadOutlined,
@@ -18,7 +20,9 @@ import {
   SaveOutlined,
   SettingOutlined,
   FileTextOutlined,
-  DatabaseOutlined
+  DatabaseOutlined,
+  SyncOutlined,
+  ProjectOutlined
 } from '@ant-design/icons';
 import ReactFlow, {
   Node,
@@ -39,6 +43,7 @@ import { useParams } from 'react-router-dom';
 import NodeLibrary from '../components/NodeLibrary';
 import PropertyPanel from '../components/PropertyPanel';
 import FileUploadArea from '../components/FileUploadArea';
+import { useProjectSync } from '../hooks/useProjectSync';
 
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -66,6 +71,107 @@ const Workspace: React.FC = () => {
   const [executionProgress, setExecutionProgress] = useState(0);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // 使用项目同步Hook
+  const {
+    projectInfo,
+    isLoading: isLoadingProject,
+    isSyncing,
+    lastSyncTime,
+    loadProjectWorkspace,
+    syncWorkspace,
+    updateProjectStatus
+  } = useProjectSync();
+
+  // 存储初始视口数据
+  const [initialViewport, setInitialViewport] = useState<{ x: number; y: number; zoom: number } | null>(null);
+  const [hasLoadedWorkspace, setHasLoadedWorkspace] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  // 当项目ID改变时重置工作区状态
+  useEffect(() => {
+    setHasLoadedWorkspace(false);
+    setInitialViewport(null);
+    setLoadError(null);
+    setRetryCount(0);
+    setNodes([]);
+    setEdges([]);
+  }, [projectId, setNodes, setEdges]);
+
+  // 加载项目工作区数据
+  useEffect(() => {
+    if (projectId && !hasLoadedWorkspace && !loadError) {
+      setHasLoadedWorkspace(true);
+      setLoadError(null);
+      
+      loadProjectWorkspace(projectId).then((workspaceData) => {
+        if (workspaceData) {
+          setNodes(workspaceData.nodes || []);
+          setEdges(workspaceData.edges || []);
+          if (workspaceData.viewport) {
+            setInitialViewport(workspaceData.viewport);
+          }
+          setLoadError(null);
+        } else {
+          setLoadError('工作区数据加载失败');
+          setHasLoadedWorkspace(false);
+        }
+      }).catch((error) => {
+        console.error('Failed to load workspace:', error);
+        setLoadError(error.message || '工作区数据加载失败');
+        setHasLoadedWorkspace(false);
+      });
+    }
+  }, [projectId, loadProjectWorkspace, hasLoadedWorkspace, loadError]);
+
+  // 当ReactFlow实例准备好且有初始视口数据时，设置视口
+  useEffect(() => {
+    if (reactFlowInstance && initialViewport) {
+      reactFlowInstance.setViewport(initialViewport);
+      setInitialViewport(null); // 清除初始视口数据，避免重复设置
+    }
+  }, [reactFlowInstance, initialViewport]);
+
+  // 重试加载工作区数据
+  const handleRetryLoad = useCallback(() => {
+    if (retryCount < 3) {
+      setRetryCount(prev => prev + 1);
+      setLoadError(null);
+      setHasLoadedWorkspace(false);
+    } else {
+      message.error('重试次数过多，请刷新页面或联系管理员');
+    }
+  }, [retryCount]);
+
+  // 自动保存工作流变更
+  useEffect(() => {
+    // 只有在工作区已加载且有实际内容变更时才进行自动保存
+    if (!projectId || !hasLoadedWorkspace || (nodes.length === 0 && edges.length === 0)) return;
+    
+    // 清除之前的定时器
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+    
+    // 设置新的定时器（防抖）
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      const workspaceData = {
+        nodes,
+        edges,
+        viewport: reactFlowInstance?.getViewport() || { x: 0, y: 0, zoom: 1 }
+      };
+      
+      syncWorkspace(projectId, workspaceData, true);
+    }, 2000); // 增加到2秒防抖，避免频繁保存
+    
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [nodes, edges, projectId, syncWorkspace, reactFlowInstance, hasLoadedWorkspace]);
 
   // 连接节点
   const onConnect = useCallback(
@@ -210,6 +316,22 @@ const Workspace: React.FC = () => {
     }
   };
 
+  // 手动同步项目
+  const handleManualSync = async () => {
+    if (!projectId) {
+      message.warning('未选择项目');
+      return;
+    }
+    
+    const workspaceData = {
+      nodes,
+      edges,
+      viewport: reactFlowInstance?.getViewport() || { x: 0, y: 0, zoom: 1 }
+    };
+    
+    await syncWorkspace(projectId, workspaceData, false);
+  };
+
   // 文件上传成功回调
   const handleFileUploaded = (fileInfo: any) => {
     setUploadedFiles(prev => [...prev, fileInfo]);
@@ -244,17 +366,67 @@ const Workspace: React.FC = () => {
         <Layout>
           {/* 顶部工具栏 */}
           <div className="bg-gray-800 border-b border-gray-700 p-4">
+            {/* 项目上下文信息 */}
+            {projectId && projectInfo && (
+              <div className="mb-4">
+                <Card className="bg-gray-700 border-gray-600">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <ProjectOutlined className="text-blue-400 text-xl" />
+                      <div>
+                        <Title level={5} className="text-white mb-1">
+                          {projectInfo.name}
+                        </Title>
+                        {projectInfo.description && (
+                          <Text className="text-gray-300 text-sm">
+                            {projectInfo.description}
+                          </Text>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <Tag color={projectInfo.status === 'active' ? 'green' : projectInfo.status === 'draft' ? 'orange' : 'gray'}>
+                        {projectInfo.status === 'active' ? '活跃' : projectInfo.status === 'draft' ? '草稿' : '已归档'}
+                      </Tag>
+                      {lastSyncTime && (
+                        <Text className="text-gray-400 text-xs">
+                          最后同步: {lastSyncTime.toLocaleTimeString()}
+                        </Text>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            )}
+            
             <div className="flex justify-between items-center">
               <div className="flex items-center space-x-4">
                 <Title level={4} className="text-white mb-0">
                   数据处理工作区
                 </Title>
-                {projectId && (
-                  <Tag color="blue">项目: {projectId}</Tag>
+                {!projectId && (
+                  <Alert
+                    message="通用工作区模式"
+                    description="当前未关联特定项目，工作流将保存为独立文件"
+                    type="info"
+                    showIcon
+                    className="bg-blue-900 border-blue-700"
+                  />
                 )}
               </div>
               
               <Space>
+                {projectId && (
+                  <Button
+                    icon={<SyncOutlined />}
+                    onClick={handleManualSync}
+                    loading={isSyncing}
+                    className="bg-green-600 hover:bg-green-700 border-green-600 text-white"
+                  >
+                    {isSyncing ? '同步中...' : '同步项目'}
+                  </Button>
+                )}
+                
                 <Button
                   icon={<UploadOutlined />}
                   onClick={() => setUploadDrawerVisible(true)}
@@ -297,7 +469,34 @@ const Workspace: React.FC = () => {
 
           {/* 流程图画布 */}
           <Content className="relative">
-            <div className="w-full h-full" ref={reactFlowWrapper}>
+            {isLoadingProject ? (
+              <div className="flex justify-center items-center h-full">
+                <Spin size="large" tip="加载项目数据中..." />
+              </div>
+            ) : loadError ? (
+              <div className="flex flex-col justify-center items-center h-full space-y-4">
+                <Alert
+                  message="工作区加载失败"
+                  description={loadError}
+                  type="error"
+                  showIcon
+                  className="mb-4"
+                />
+                <Space>
+                  <Button 
+                    type="primary" 
+                    onClick={handleRetryLoad}
+                    disabled={retryCount >= 3}
+                  >
+                    重试 {retryCount > 0 && `(${retryCount}/3)`}
+                  </Button>
+                  <Button onClick={() => window.location.reload()}>
+                    刷新页面
+                  </Button>
+                </Space>
+              </div>
+            ) : (
+              <div className="w-full h-full" ref={reactFlowWrapper}>
               <ReactFlow
                 nodes={nodes}
                 edges={edges}
@@ -324,7 +523,8 @@ const Workspace: React.FC = () => {
                   maskColor="rgba(0, 0, 0, 0.2)"
                 />
               </ReactFlow>
-            </div>
+              </div>
+            )}
           </Content>
         </Layout>
 

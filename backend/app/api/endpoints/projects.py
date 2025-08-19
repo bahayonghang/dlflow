@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete
+from sqlalchemy import select, update, delete, func
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime
@@ -101,13 +101,13 @@ async def list_projects(
     for project in projects:
         # 统计执行次数
         exec_result = await db.execute(
-            select(db.func.count(Execution.id)).where(Execution.project_id == project.id)
+            select(func.count(Execution.id)).where(Execution.project_id == project.id)
         )
         executions_count = exec_result.scalar() or 0
         
         # 统计文件数量
         file_result = await db.execute(
-            select(db.func.count(UploadedFile.id)).where(UploadedFile.project_id == project.id)
+            select(func.count(UploadedFile.id)).where(UploadedFile.project_id == project.id)
         )
         files_count = file_result.scalar() or 0
         
@@ -161,6 +161,188 @@ async def get_project(
         executions_count=len(project.executions),
         files_count=len(project.files)
     )
+
+
+@router.get("/{project_id}/workspace", response_model=dict)
+async def get_project_workspace(
+    project_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """获取项目工作区数据"""
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="项目不存在"
+        )
+    
+    # 默认工作区数据
+    workspace_data = {
+        "nodes": [],
+        "edges": [],
+        "viewport": {"x": 0, "y": 0, "zoom": 1}
+    }
+    
+    # 如果项目有关联的工作流文件，加载工作流数据
+    if project.workflow_path:
+        try:
+            import json
+            import os
+            from app.core.config import settings
+            
+            workflow_file_path = os.path.join(settings.WORKFLOWS_DIR, f"{project.workflow_path}.json")
+            if os.path.exists(workflow_file_path):
+                with open(workflow_file_path, 'r', encoding='utf-8') as f:
+                    workflow_data = json.load(f)
+                    if 'configuration' in workflow_data:
+                        workspace_data = workflow_data['configuration']
+        except Exception as e:
+            # 如果加载失败，使用默认数据
+            pass
+    
+    project_info = {
+        "id": project.id,
+        "name": project.name,
+        "description": project.description,
+        "status": project.status,
+        "created_at": project.created_at.isoformat(),
+        "updated_at": project.updated_at.isoformat()
+    }
+    
+    return {
+        "success": True,
+        "workspace_data": workspace_data,
+        "project_info": project_info
+    }
+
+
+class WorkspaceSyncRequest(BaseModel):
+    workspace_data: dict
+    auto_update_status: Optional[bool] = False
+
+
+@router.post("/{project_id}/sync-workspace", response_model=dict)
+async def sync_project_workspace(
+    project_id: str,
+    sync_request: WorkspaceSyncRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """同步工作区数据到项目"""
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="项目不存在"
+        )
+    
+    try:
+        import json
+        import os
+        from app.core.config import settings
+        
+        # 确保工作流目录存在
+        os.makedirs(settings.WORKFLOWS_DIR, exist_ok=True)
+        
+        # 生成工作流文件名（如果项目还没有关联的工作流文件）
+        if not project.workflow_path:
+            project.workflow_path = f"project_{project_id}_workflow"
+        
+        # 保存工作流数据到文件
+        workflow_file_path = os.path.join(settings.WORKFLOWS_DIR, f"{project.workflow_path}.json")
+        workflow_data = {
+            "id": project.workflow_path,
+            "name": f"{project.name} - 工作流",
+            "description": "项目关联的数据处理工作流",
+            "configuration": sync_request.workspace_data,
+            "status": "active" if sync_request.workspace_data.get("nodes") else "draft",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        with open(workflow_file_path, 'w', encoding='utf-8') as f:
+            json.dump(workflow_data, f, ensure_ascii=False, indent=2)
+        
+        # 更新项目信息
+        updated_fields = ["workflow_path", "updated_at"]
+        
+        # 如果启用自动状态更新
+        if sync_request.auto_update_status:
+            nodes_count = len(sync_request.workspace_data.get("nodes", []))
+            edges_count = len(sync_request.workspace_data.get("edges", []))
+            
+            if nodes_count == 0:
+                project.status = "draft"
+            elif nodes_count > 0 and edges_count > 0:
+                project.status = "active"
+            else:
+                project.status = "draft"
+            
+            updated_fields.append("status")
+        
+        await db.commit()
+        await db.refresh(project)
+        
+        return {
+            "success": True,
+            "updated_fields": updated_fields,
+            "message": "工作区数据同步成功"
+        }
+        
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"同步失败: {str(e)}"
+        )
+
+
+class ProjectStatusUpdate(BaseModel):
+    status: str
+    reason: Optional[str] = None
+
+
+@router.put("/{project_id}/status", response_model=dict)
+async def update_project_status(
+    project_id: str,
+    status_update: ProjectStatusUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """更新项目状态"""
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="项目不存在"
+        )
+    
+    # 验证状态值
+    valid_statuses = ["active", "draft", "archived"]
+    if status_update.status not in valid_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"无效的状态值。有效值: {', '.join(valid_statuses)}"
+        )
+    
+    old_status = project.status
+    project.status = status_update.status
+    
+    await db.commit()
+    await db.refresh(project)
+    
+    return {
+        "success": True,
+        "old_status": old_status,
+        "new_status": project.status,
+        "reason": status_update.reason,
+        "updated_at": project.updated_at.isoformat(),
+        "message": f"项目状态已从 {old_status} 更新为 {project.status}"
+    }
 
 
 @router.put("/{project_id}", response_model=ProjectResponse)
@@ -260,172 +442,3 @@ async def restore_project(
     await db.commit()
     
     return {"message": "项目已恢复"}
-
-from typing import List, Optional
-from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
-
-from app.core.storage import ProjectStorage
-
-router = APIRouter()
-
-
-class ProjectCreate(BaseModel):
-    """项目创建请求模型"""
-    name: str
-    description: Optional[str] = ""
-    metadata: Optional[dict] = None
-
-
-class ProjectUpdate(BaseModel):
-    """项目更新请求模型"""
-    name: Optional[str] = None
-    description: Optional[str] = None
-    metadata: Optional[dict] = None
-    status: Optional[str] = None
-
-
-class ProjectResponse(BaseModel):
-    """项目响应模型"""
-    id: str
-    name: str
-    description: str
-    workflow_path: str
-    metadata: dict
-    created_at: str
-    updated_at: str
-    status: str
-    execution_count: int
-    last_execution_id: str
-    associated_files: List[str]
-
-
-class ProjectListResponse(BaseModel):
-    """项目列表响应模型"""
-    projects: List[dict]
-    total: int
-
-
-@router.post("/", response_model=dict)
-async def create_project(project: ProjectCreate):
-    """创建新项目"""
-    try:
-        project_id = ProjectStorage.create_project(
-            name=project.name,
-            description=project.description or "",
-            metadata=project.metadata or {}
-        )
-        
-        return {
-            "success": True,
-            "project_id": project_id,
-            "message": "项目创建成功"
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"创建项目失败: {str(e)}"
-        )
-
-
-@router.get("/", response_model=ProjectListResponse)
-async def list_projects():
-    """获取项目列表"""
-    try:
-        projects = ProjectStorage.list_projects()
-        return ProjectListResponse(
-            projects=projects,
-            total=len(projects)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取项目列表失败: {str(e)}"
-        )
-
-
-@router.get("/{project_id}", response_model=ProjectResponse)
-async def get_project(project_id: str):
-    """获取项目详情"""
-    project = ProjectStorage.get_project(project_id)
-    
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="项目不存在"
-        )
-    
-    return ProjectResponse(**project)
-
-
-@router.put("/{project_id}", response_model=dict)
-async def update_project(project_id: str, updates: ProjectUpdate):
-    """更新项目信息"""
-    # 检查项目是否存在
-    existing_project = ProjectStorage.get_project(project_id)
-    if not existing_project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="项目不存在"
-        )
-    
-    # 准备更新数据
-    update_data = {}
-    if updates.name is not None:
-        update_data["name"] = updates.name
-    if updates.description is not None:
-        update_data["description"] = updates.description
-    if updates.metadata is not None:
-        update_data["metadata"] = updates.metadata
-    if updates.status is not None:
-        update_data["status"] = updates.status
-    
-    try:
-        success = ProjectStorage.update_project(project_id, update_data)
-        
-        if success:
-            return {
-                "success": True,
-                "message": "项目更新成功"
-            }
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="项目更新失败"
-            )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"项目更新失败: {str(e)}"
-        )
-
-
-@router.delete("/{project_id}", response_model=dict)
-async def delete_project(project_id: str):
-    """删除项目"""
-    # 检查项目是否存在
-    existing_project = ProjectStorage.get_project(project_id)
-    if not existing_project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="项目不存在"
-        )
-    
-    try:
-        success = ProjectStorage.delete_project(project_id)
-        
-        if success:
-            return {
-                "success": True,
-                "message": "项目删除成功"
-            }
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="项目删除失败"
-            )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"项目删除失败: {str(e)}"
-        )

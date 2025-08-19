@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Layout, Menu, Typography, Avatar, Dropdown, Space, Button, theme } from 'antd';
 import {
   ProjectOutlined,
@@ -13,10 +14,8 @@ import {
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 
-// 导入页面组件
-import ProjectManagement from './pages/ProjectManagement';
-import Workspace from './pages/Workspace';
-import ExecutionHistory from './pages/ExecutionHistory';
+// 导入路由组件
+import AppRouter from './components/AppRouter';
 
 // 导入样式
 import './App.css';
@@ -68,16 +67,40 @@ const userMenuItems: MenuProps['items'] = [
   },
 ];
 
-const App: React.FC = () => {
+// 内部组件，用于访问路由信息
+const AppContent: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
-  const [selectedKey, setSelectedKey] = useState('projects');
+  const location = useLocation();
+  const navigate = useNavigate();
   const {
     token: { colorBgContainer },
   } = theme.useToken();
 
+  // 根据当前路径确定选中的菜单项
+  const getSelectedKey = () => {
+    const path = location.pathname;
+    if (path.startsWith('/workspace')) {
+      return 'workspace';
+    } else if (path.startsWith('/history')) {
+      return 'history';
+    } else {
+      return 'projects';
+    }
+  };
+
   // 处理菜单点击
   const handleMenuClick = ({ key }: { key: string }) => {
-    setSelectedKey(key);
+    switch (key) {
+      case 'projects':
+        navigate('/projects');
+        break;
+      case 'workspace':
+        navigate('/workspace');
+        break;
+      case 'history':
+        navigate('/history');
+        break;
+    }
   };
 
   // 处理用户菜单点击
@@ -95,18 +118,12 @@ const App: React.FC = () => {
     }
   };
 
-  // 渲染当前页面内容
-  const renderContent = () => {
-    switch (selectedKey) {
-      case 'projects':
-        return <ProjectManagement />;
-      case 'workspace':
-        return <Workspace />;
-      case 'history':
-        return <ExecutionHistory />;
-      default:
-        return <ProjectManagement />;
-    }
+  const selectedKey = getSelectedKey();
+  
+  // 获取当前页面标题
+  const getCurrentPageTitle = () => {
+    const item = menuItems.find(item => item?.key === selectedKey);
+    return item && 'label' in item ? item.label : '';
   };
 
   return (
@@ -177,10 +194,7 @@ const App: React.FC = () => {
             <div className="flex items-center space-x-2">
               <Text className="text-gray-400">当前页面:</Text>
               <Text className="text-white font-medium">
-                {(() => {
-                  const item = menuItems.find(item => item?.key === selectedKey);
-                  return item && 'label' in item ? item.label : '';
-                })()}
+                {getCurrentPageTitle()}
               </Text>
             </div>
           </div>
@@ -222,11 +236,16 @@ const App: React.FC = () => {
             minHeight: 'calc(100vh - 64px)',
           }}
         >
-          {renderContent()}
+          <AppRouter />
         </Content>
       </Layout>
     </Layout>
   );
+};
+
+// 主App组件
+const App: React.FC = () => {
+  return <AppContent />;
 };
 
 export default App;

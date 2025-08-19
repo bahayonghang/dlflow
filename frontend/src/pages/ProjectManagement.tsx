@@ -22,7 +22,8 @@ import {
   DeleteOutlined,
   MoreOutlined,
   FolderOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  PlayCircleOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { MenuProps } from 'antd';
@@ -63,9 +64,9 @@ const ProjectManagement: React.FC = () => {
   const fetchProjects = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/projects');
+      const response = await fetch('/api/projects/');
       const data = await response.json();
-      setProjects(data.projects || []);
+      setProjects(data || []);
     } catch (error) {
       message.error('获取项目列表失败');
       console.error('Error fetching projects:', error);
@@ -81,7 +82,7 @@ const ProjectManagement: React.FC = () => {
   // 创建或更新项目
   const handleSubmit = async (values: ProjectFormData) => {
     try {
-      const url = editingProject ? `/api/projects/${editingProject.id}` : '/api/projects';
+      const url = editingProject ? `/api/projects/${editingProject.id}` : '/api/projects/';
       const method = editingProject ? 'PUT' : 'POST';
       
       const response = await fetch(url, {
@@ -158,9 +159,9 @@ const ProjectManagement: React.FC = () => {
     setModalVisible(true);
   };
 
-  // 进入项目
-  const handleEnterProject = (projectId: string) => {
-    navigate(`/project/${projectId}`);
+  // 进入项目工作区
+  const handleEnterWorkspace = (projectId: string) => {
+    navigate(`/workspace/${projectId}`);
   };
 
   // 获取状态标签颜色
@@ -265,10 +266,17 @@ const ProjectManagement: React.FC = () => {
             {projects.map((project) => (
               <Col xs={24} sm={12} lg={8} xl={6} key={project.id}>
                 <Card
-                  className="bg-gray-800 border-gray-700 hover:border-blue-500 transition-all duration-300 cursor-pointer"
+                  className="bg-gray-800 border-gray-700 hover:border-blue-500 transition-all duration-300"
                   hoverable
-                  onClick={() => handleEnterProject(project.id)}
                   actions={[
+                    <Button
+                      type="primary"
+                      icon={<PlayCircleOutlined />}
+                      onClick={() => handleEnterWorkspace(project.id)}
+                      className="bg-blue-600 hover:bg-blue-700 border-blue-600"
+                    >
+                      进入工作区
+                    </Button>,
                     <Dropdown
                       menu={{ items: getProjectMenuItems(project) }}
                       trigger={['click']}
@@ -277,7 +285,6 @@ const ProjectManagement: React.FC = () => {
                         type="text"
                         icon={<MoreOutlined />}
                         className="text-gray-400 hover:text-white"
-                        onClick={(e) => e.stopPropagation()}
                       />
                     </Dropdown>,
                   ]}
