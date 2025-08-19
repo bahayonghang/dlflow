@@ -11,6 +11,7 @@ import projectRoutes from './routes/projects';
 import workflowRoutes from './routes/workflows';
 import executionRoutes from './routes/executions';
 import nodeTypeRoutes from './routes/node-types';
+import fileRoutes from './routes/files';
 
 // __dirname is available in CommonJS mode
 
@@ -32,6 +33,7 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/workflows', workflowRoutes);
 app.use('/api/executions', executionRoutes);
 app.use('/api/node-types', nodeTypeRoutes);
+app.use('/api/files', fileRoutes);
 
 /**
  * health

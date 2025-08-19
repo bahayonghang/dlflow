@@ -12,15 +12,21 @@ import {
   Card,
   Tag,
   Alert,
-  Collapse
+  Collapse,
+  Upload,
+  message
 } from 'antd';
 import {
   SettingOutlined,
   InfoCircleOutlined,
   FileTextOutlined,
-  DatabaseOutlined
+  DatabaseOutlined,
+  UploadOutlined,
+  PlusOutlined
 } from '@ant-design/icons';
 import type { Node } from 'reactflow';
+import FileUploadArea from './FileUploadArea';
+import { useFileUpload } from '../hooks/useFileUpload';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -30,6 +36,7 @@ interface PropertyPanelProps {
   node: Node;
   onUpdate: (updates: any) => void;
   uploadedFiles: any[];
+  onFileUploaded?: (fileInfo: any) => void;
 }
 
 // 节点类型配置
@@ -291,12 +298,32 @@ const nodeTypeConfigs = {
   }
 };
 
-const PropertyPanel: React.FC<PropertyPanelProps> = ({ node, onUpdate, uploadedFiles }) => {
+const PropertyPanel: React.FC<PropertyPanelProps> = ({ node, onUpdate, uploadedFiles, onFileUploaded }) => {
   const [form] = Form.useForm();
   const [parameters, setParameters] = useState(node.data.parameters || {});
+  const [showFileUpload, setShowFileUpload] = useState(false);
   
   const nodeType = node.data.nodeType || 'default';
   const config = nodeTypeConfigs[nodeType as keyof typeof nodeTypeConfigs];
+  
+  // 文件上传Hook
+  const { uploadFile, isUploading } = useFileUpload({
+    onSuccess: (fileInfo) => {
+      if (onFileUploaded) {
+        onFileUploaded(fileInfo);
+      }
+      // 自动选择刚上传的文件
+      const newParameters = { ...parameters, file_id: fileInfo.id };
+      setParameters(newParameters);
+      onUpdate({ parameters: newParameters });
+      form.setFieldValue('file_id', fileInfo.id);
+      setShowFileUpload(false);
+      message.success(`文件 ${fileInfo.filename} 上传成功并已选择`);
+    },
+    onError: (error) => {
+      message.error(`文件上传失败: ${error.message}`);
+    }
+  });
 
   useEffect(() => {
     // 初始化表单值
@@ -350,22 +377,69 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ node, onUpdate, uploadedF
       
       case 'file_select':
         return (
-          <Select 
-            placeholder="请选择文件"
-            allowClear
-            showSearch
-            optionFilterProp="children"
-          >
-            {uploadedFiles.map((file) => (
-              <Option key={file.id} value={file.id}>
-                <Space>
-                  <FileTextOutlined />
-                  {file.filename}
-                  <Tag>{file.file_type.toUpperCase()}</Tag>
-                </Space>
-              </Option>
-            ))}
-          </Select>
+          <div className="space-y-3">
+            <div className="flex items-center space-x-2">
+              <Select 
+                placeholder="请选择文件"
+                allowClear
+                showSearch
+                optionFilterProp="children"
+                className="flex-1"
+                dropdownRender={(menu) => (
+                  <div>
+                    {menu}
+                    {uploadedFiles.length === 0 && (
+                      <div className="p-2 text-center text-gray-500">
+                        暂无已上传文件
+                      </div>
+                    )}
+                  </div>
+                )}
+              >
+                {uploadedFiles.map((file) => (
+                  <Option key={file.id} value={file.id}>
+                    <Space>
+                      <FileTextOutlined />
+                      {file.filename}
+                      <Tag>{file.file_type.toUpperCase()}</Tag>
+                    </Space>
+                  </Option>
+                ))}
+              </Select>
+              <Button
+                type="primary"
+                icon={<UploadOutlined />}
+                onClick={() => setShowFileUpload(!showFileUpload)}
+                loading={isUploading}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {showFileUpload ? '取消' : '上传'}
+              </Button>
+            </div>
+            
+            {/* 文件上传区域 */}
+            {showFileUpload && (
+              <div className="border border-gray-600 rounded-lg p-4 bg-gray-800">
+                <FileUploadArea
+                  onFileUploaded={(fileInfo) => {
+                    if (onFileUploaded) {
+                      onFileUploaded(fileInfo);
+                    }
+                    // 自动选择刚上传的文件
+                    const newParameters = { ...parameters, file_id: fileInfo.id };
+                    setParameters(newParameters);
+                    onUpdate({ parameters: newParameters });
+                    form.setFieldValue('file_id', fileInfo.id);
+                    setShowFileUpload(false);
+                    message.success(`文件 ${fileInfo.filename} 上传成功并已选择`);
+                  }}
+                  acceptedTypes={['.csv', '.parquet']}
+                  maxFileSize={100}
+                  enablePreview={true}
+                />
+              </div>
+            )}
+          </div>
         );
       
       case 'textarea':

@@ -542,6 +542,7 @@ const Workspace: React.FC = () => {
               node={selectedNode}
               onUpdate={(updates) => handleNodeUpdate(selectedNode.id, updates)}
               uploadedFiles={uploadedFiles}
+              onFileUploaded={handleFileUploaded}
             />
           )}
         </Drawer>

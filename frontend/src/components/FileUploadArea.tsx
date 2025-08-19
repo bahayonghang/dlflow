@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Upload,
   Button,
@@ -9,7 +9,8 @@ import {
   Card,
   Tag,
   message,
-  Divider
+  Divider,
+  Spin
 } from 'antd';
 import {
   UploadOutlined,
@@ -17,31 +18,65 @@ import {
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   DatabaseOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  EyeOutlined,
+  DeleteOutlined
 } from '@ant-design/icons';
-import type { UploadProps, UploadFile } from 'antd';
+import type { UploadProps } from 'antd';
+import { useFileUpload } from '../hooks/useFileUpload';
+import { useFilePreview } from '../hooks/useFilePreview';
+import DataPreview from './DataPreview';
 
 const { Title, Text, Paragraph } = Typography;
 const { Dragger } = Upload;
 
 interface FileUploadAreaProps {
-  onFileUploaded: (fileInfo: any) => void;
+  onFileUploaded?: (fileInfo: any) => void;
+  projectId?: string;
+  maxFileSize?: number;
+  acceptedTypes?: string[];
+  enablePreview?: boolean;
 }
 
-interface UploadedFileInfo {
-  id: string;
-  filename: string;
-  file_type: string;
-  file_size: number;
-  upload_time: string;
-  status: 'uploading' | 'success' | 'error';
-  progress: number;
-  preview_data?: any;
-}
+const FileUploadArea: React.FC<FileUploadAreaProps> = ({ 
+  onFileUploaded,
+  projectId,
+  maxFileSize = 100,
+  acceptedTypes = ['.csv', '.parquet'],
+  enablePreview = true
+}) => {
+  const [selectedFileId, setSelectedFileId] = useState<string>('');
+  const [showPreview, setShowPreview] = useState<boolean>(false);
 
-const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUploaded }) => {
-  const [uploadingFiles, setUploadingFiles] = useState<UploadedFileInfo[]>([]);
-  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
+  // 使用文件上传Hook
+  const {
+    uploadFile,
+    uploadProgress,
+    isUploading,
+    uploadedFiles,
+    currentUploadStatus,
+    removeFile,
+    retryUpload
+  } = useFileUpload({
+    maxFileSize: maxFileSize * 1024 * 1024, // 转换为字节
+    acceptedTypes,
+    projectId,
+    onSuccess: onFileUploaded,
+    autoValidate: true
+  });
+
+  // 使用文件预览Hook
+  const {
+    previewData,
+    previewStatus,
+    currentPhase,
+    loadPreview,
+    clearPreview,
+    isPreviewSupported
+  } = useFilePreview({
+    enableProgressivePreview: true,
+    cachePreviewData: true
+  });
 
   // 支持的文件类型
   const supportedTypes = {
@@ -59,133 +94,68 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUploaded }) => {
     }
   };
 
-  // 文件上传前的验证
-  const beforeUpload = (file: File) => {
-    const fileExtension = file.name.split('.').pop()?.toLowerCase();
-    
-    if (!fileExtension || !['csv', 'parquet'].includes(fileExtension)) {
-      message.error('只支持 CSV 和 Parquet 格式的文件');
-      return false;
-    }
-
-    const isLt100M = file.size / 1024 / 1024 < 100;
-    if (!isLt100M) {
-      message.error('文件大小不能超过 100MB');
-      return false;
-    }
-
+  // 文件上传前的验证（Hook内部已处理，这里只做基础检查）
+  const beforeUpload = useCallback((file: File) => {
+    // Hook会自动进行详细验证，这里只做快速检查
     return true;
-  };
+  }, []);
 
-  // 自定义上传请求
-  const customRequest = async (options: any) => {
+  // 自定义上传请求（使用Hook处理）
+  const customRequest = useCallback(async (options: any) => {
     const { file, onProgress, onSuccess, onError } = options;
     
-    const fileId = `file_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const fileExtension = file.name.split('.').pop()?.toLowerCase();
-    
-    // 添加到上传中列表
-    const fileInfo: UploadedFileInfo = {
-      id: fileId,
-      filename: file.name,
-      file_type: fileExtension || 'unknown',
-      file_size: file.size,
-      upload_time: new Date().toISOString(),
-      status: 'uploading',
-      progress: 0
-    };
-    
-    setUploadingFiles(prev => [...prev, fileInfo]);
-
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('file_id', fileId);
-
-      // 模拟上传进度
-      let progress = 0;
-      const progressInterval = setInterval(() => {
-        progress += Math.random() * 30;
-        if (progress > 90) {
-          progress = 90;
-          clearInterval(progressInterval);
-        }
-        
-        setUploadingFiles(prev => 
-          prev.map(f => 
-            f.id === fileId 
-              ? { ...f, progress: Math.round(progress) }
-              : f
-          )
-        );
-        
-        onProgress({ percent: Math.round(progress) });
-      }, 200);
-
-      // 实际上传请求
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      clearInterval(progressInterval);
-
-      if (!response.ok) {
-        throw new Error(`上传失败: ${response.statusText}`);
+      const result = await uploadFile(file);
+      if (result) {
+        onProgress({ percent: 100 });
+        onSuccess(result);
+      } else {
+        onError(new Error('上传失败'));
       }
-
-      const result = await response.json();
-      
-      // 更新文件状态为成功
-      const successFileInfo = {
-        ...fileInfo,
-        status: 'success' as const,
-        progress: 100,
-        preview_data: result.preview_data
-      };
-      
-      setUploadingFiles(prev => 
-        prev.map(f => 
-          f.id === fileId 
-            ? successFileInfo
-            : f
-        )
-      );
-
-      onProgress({ percent: 100 });
-      onSuccess(result);
-      
-      // 通知父组件
-      onFileUploaded({
-        id: fileId,
-        filename: file.name,
-        file_type: fileExtension,
-        file_size: file.size,
-        upload_time: new Date().toISOString(),
-        preview_data: result.preview_data
-      });
-      
     } catch (error) {
-      console.error('Upload error:', error);
-      
-      // 更新文件状态为失败
-      setUploadingFiles(prev => 
-        prev.map(f => 
-          f.id === fileId 
-            ? { ...f, status: 'error' as const, progress: 0 }
-            : f
-        )
-      );
-      
       onError(error);
-      message.error(`文件上传失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
-  };
+  }, [uploadFile]);
+
+  // 预览文件
+  const handlePreview = useCallback(async (fileId: string) => {
+    if (!enablePreview) {
+      message.info('预览功能已禁用');
+      return;
+    }
+
+    const file = uploadedFiles.find(f => f.id === fileId);
+    if (!file) {
+      message.error('文件不存在');
+      return;
+    }
+
+    if (!isPreviewSupported(file.file_type)) {
+      message.error(`不支持预览 ${file.file_type.toUpperCase()} 格式的文件`);
+      return;
+    }
+
+    setSelectedFileId(fileId);
+    setShowPreview(true);
+    await loadPreview(fileId);
+  }, [enablePreview, uploadedFiles, isPreviewSupported, loadPreview]);
+
+  // 关闭预览
+  const handleClosePreview = useCallback(() => {
+    setShowPreview(false);
+    setSelectedFileId('');
+    clearPreview();
+  }, [clearPreview]);
+
+  // 重试上传
+  const handleRetry = useCallback(async (fileId: string) => {
+    await retryUpload(fileId);
+  }, [retryUpload]);
 
   // 移除文件
-  const handleRemove = (fileId: string) => {
-    setUploadingFiles(prev => prev.filter(f => f.id !== fileId));
-  };
+  const handleRemove = useCallback(async (fileId: string) => {
+    await removeFile(fileId);
+  }, [removeFile]);
 
   const uploadProps: UploadProps = {
     name: 'file',
@@ -193,7 +163,7 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUploaded }) => {
     customRequest,
     beforeUpload,
     showUploadList: false,
-    accept: '.csv,.parquet'
+    accept: acceptedTypes.join(',')
   };
 
   return (
@@ -207,7 +177,7 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUploaded }) => {
           点击或拖拽文件到此区域上传
         </p>
         <p className="ant-upload-hint text-gray-400">
-          支持 CSV 和 Parquet 格式文件，单个文件不超过 100MB
+          支持 {acceptedTypes.join(', ')} 格式文件，单个文件不超过 {maxFileSize}MB
         </p>
       </Dragger>
 
@@ -235,41 +205,75 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUploaded }) => {
         </div>
       </Card>
 
+      {/* 上传状态显示 */}
+      {currentUploadStatus && (
+        <Card className="mb-4 bg-gray-800 border-gray-700">
+          <div className="flex items-center space-x-3">
+            <Spin spinning={currentUploadStatus.phase !== 'complete' && currentUploadStatus.phase !== 'error'} />
+            <div className="flex-1">
+              <Text className="text-white">{currentUploadStatus.message}</Text>
+              {currentPhase && (
+                <div className="mt-2">
+                  <Text className="text-gray-400 text-sm">
+                    阶段: {currentPhase.phase} - {currentPhase.message}
+                  </Text>
+                  <Progress 
+                    percent={currentPhase.progress} 
+                    size="small" 
+                    className="mt-1"
+                    strokeColor="#1890ff"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* 上传中和已上传文件列表 */}
-      {uploadingFiles.length > 0 && (
+      {uploadedFiles.length > 0 && (
         <div>
           <Divider orientation="left" className="text-gray-300">
-            文件上传状态
+            文件列表 ({uploadedFiles.length})
           </Divider>
           
           <div className="space-y-3">
-            {uploadingFiles.map((file) => (
+            {uploadedFiles.map((file) => (
               <Card 
                 key={file.id} 
                 size="small" 
                 className="bg-gray-800 border-gray-700"
                 actions={[
-                  file.status === 'success' && (
+                  file.status === 'success' && enablePreview && (
                     <Button 
                       type="text" 
                       size="small"
-                      icon={<DatabaseOutlined />}
+                      icon={<EyeOutlined />}
                       className="text-blue-400 hover:text-blue-300"
-                      onClick={() => {
-                        // TODO: 实现数据预览功能
-                        message.info('数据预览功能开发中');
-                      }}
+                      onClick={() => handlePreview(file.id)}
                     >
                       预览
+                    </Button>
+                  ),
+                  file.status === 'error' && (
+                    <Button 
+                      type="text" 
+                      size="small"
+                      icon={<UploadOutlined />}
+                      className="text-orange-400 hover:text-orange-300"
+                      onClick={() => handleRetry(file.id)}
+                    >
+                      重试
                     </Button>
                   ),
                   <Button 
                     type="text" 
                     size="small"
+                    icon={<DeleteOutlined />}
                     danger
                     onClick={() => handleRemove(file.id)}
                   >
-                    移除
+                    删除
                   </Button>
                 ]}
               >
@@ -278,6 +282,9 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUploaded }) => {
                     <div className="text-lg">
                       {file.status === 'uploading' && (
                         <ClockCircleOutlined className="text-blue-400" />
+                      )}
+                      {file.status === 'validating' && (
+                        <Spin size="small" />
                       )}
                       {file.status === 'success' && (
                         <CheckCircleOutlined className="text-green-400" />
@@ -289,7 +296,7 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUploaded }) => {
                     
                     <div className="flex-1">
                       <div className="flex items-center space-x-2">
-                        <Text className="text-white font-medium">{file.filename}</Text>
+                        <Text className="text-white font-medium">{file.original_filename}</Text>
                         <Tag color={supportedTypes[file.file_type as keyof typeof supportedTypes]?.color || 'default'}>
                           {file.file_type.toUpperCase()}
                         </Tag>
@@ -312,11 +319,52 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUploaded }) => {
                           strokeColor="#1890ff"
                         />
                       )}
+                      
+                      {file.error && (
+                        <Text className="text-red-400 text-xs mt-1 block">
+                          错误: {file.error}
+                        </Text>
+                      )}
                     </div>
                   </div>
                 </div>
               </Card>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* 数据预览模态框 */}
+      {showPreview && selectedFileId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 max-w-6xl max-h-[90vh] overflow-auto">
+            <div className="flex justify-between items-center mb-4">
+              <Text className="text-white text-lg font-medium">数据预览</Text>
+              <Button 
+                type="text" 
+                onClick={handleClosePreview}
+                className="text-gray-400 hover:text-white"
+              >
+                关闭
+              </Button>
+            </div>
+            
+            {previewStatus === 'loading' && (
+              <div className="flex items-center justify-center py-8">
+                <Spin size="large" />
+                <Text className="ml-3 text-gray-400">正在加载预览...</Text>
+              </div>
+            )}
+            
+            {previewStatus === 'error' && (
+              <div className="text-center py-8">
+                <Text className="text-red-400">预览加载失败</Text>
+              </div>
+            )}
+            
+            {previewStatus === 'success' && previewData && (
+              <DataPreview fileId={selectedFileId} height={600} />
+            )}
           </div>
         </div>
       )}
@@ -330,6 +378,8 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUploaded }) => {
             <div>• CSV文件请确保使用UTF-8编码，第一行为列标题</div>
             <div>• Parquet文件将自动识别数据类型和结构</div>
             <div>• 时间数据请使用标准格式，系统将自动识别DateTime和tagTime列</div>
+            <div>• 支持拖拽上传和批量上传多个文件</div>
+            <div>• 上传完成后可点击预览按钮查看数据内容</div>
           </div>
         }
         type="info"
