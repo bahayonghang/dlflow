@@ -2,15 +2,17 @@ import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Layout, Menu, Typography, Avatar, Dropdown, Space, Button, theme } from 'antd';
 import {
-  ProjectOutlined,
-  AppstoreOutlined,
+  FolderOutlined,
   HistoryOutlined,
-  UserOutlined,
   SettingOutlined,
+  UserOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  ExperimentOutlined
+  ExperimentOutlined,
+  FileTextOutlined,
+  BarChartOutlined,
+  ExportOutlined
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 
@@ -26,20 +28,35 @@ const { Title, Text } = Typography;
 type MenuItem = Required<MenuProps>['items'][number];
 
 // 菜单项配置
-const menuItems: MenuItem[] = [
+const menuItems = [
+    {
+      key: 'projects',
+      icon: <FolderOutlined />,
+      label: '项目管理',
+    },
+    {
+      key: 'workspace',
+      icon: <ExperimentOutlined />,
+      label: '数据工作区',
+    },
   {
-    key: 'projects',
-    icon: <ProjectOutlined />,
-    label: '项目管理',
-  },
-  {
-    key: 'workspace',
-    icon: <AppstoreOutlined />,
-    label: '数据工作区',
-  },
-  {
-    key: 'history',
-    icon: <HistoryOutlined />,
+     key: 'transform',
+     icon: <FileTextOutlined />,
+     label: '数据转换',
+   },
+   {
+      key: 'analysis',
+      icon: <BarChartOutlined />,
+      label: '数据分析',
+    },
+    {
+      key: 'output',
+      icon: <ExportOutlined />,
+      label: '数据输出',
+    },
+    {
+      key: 'history',
+      icon: <HistoryOutlined />,
     label: '执行历史',
   },
 ];

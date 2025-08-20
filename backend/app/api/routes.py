@@ -9,7 +9,10 @@ from app.api.endpoints import (
     tasks,
     executions,
     charts,
-    node_types
+    node_types,
+    transform,
+    analysis,
+    output
 )
 
 # 创建主API路由器
@@ -56,4 +59,22 @@ api_router.include_router(
     node_types.router,
     prefix="/node-types",
     tags=["node-types"]
+)
+
+api_router.include_router(
+    transform.router,
+    prefix="/transform",
+    tags=["transform"]
+)
+
+api_router.include_router(
+    analysis.router,
+    prefix="/analysis",
+    tags=["analysis"]
+)
+
+api_router.include_router(
+    output.router,
+    prefix="/output",
+    tags=["output"]
 )

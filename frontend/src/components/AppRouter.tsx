@@ -5,6 +5,9 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import ProjectManagement from '../pages/ProjectManagement';
 import Workspace from '../pages/Workspace';
 import ExecutionHistory from '../pages/ExecutionHistory';
+import DataTransform from '../pages/DataTransform';
+import DataAnalysis from '../pages/DataAnalysis';
+import DataOutput from '../pages/DataOutput';
 
 const AppRouter: React.FC = () => {
   return (
@@ -24,8 +27,17 @@ const AppRouter: React.FC = () => {
       {/* 执行历史页面 */}
       <Route path="/history" element={<ExecutionHistory />} />
       
-      {/* 404页面 - 重定向到项目管理 */}
-      <Route path="*" element={<Navigate to="/projects" replace />} />
+      {/* 数据转换页面 */}
+        <Route path="/transform" element={<DataTransform />} />
+        
+        {/* 数据分析页面 */}
+        <Route path="/analysis" element={<DataAnalysis />} />
+        
+        {/* 数据输出页面 */}
+        <Route path="/output" element={<DataOutput />} />
+        
+        {/* 404页面 - 重定向到项目管理 */}
+        <Route path="*" element={<Navigate to="/projects" replace />} />
     </Routes>
   );
 };
