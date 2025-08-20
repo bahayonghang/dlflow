@@ -3,7 +3,6 @@ import {
   Layout,
   Button,
   Upload,
-  message,
   Drawer,
   Card,
   Typography,
@@ -12,7 +11,8 @@ import {
   Tag,
   Progress,
   Spin,
-  Alert
+  Alert,
+  App
 } from 'antd';
 import {
   UploadOutlined,
@@ -35,7 +35,8 @@ import ReactFlow, {
   Background,
   MiniMap,
   ReactFlowProvider,
-  ReactFlowInstance
+  ReactFlowInstance,
+  MarkerType
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useParams } from 'react-router-dom';
@@ -60,6 +61,7 @@ const initialNodes: Node[] = [];
 const initialEdges: Edge[] = [];
 
 const Workspace: React.FC = () => {
+  const { message } = App.useApp();
   const { projectId } = useParams<{ projectId: string }>();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -173,11 +175,44 @@ const Workspace: React.FC = () => {
     };
   }, [nodes, edges, projectId, syncWorkspace, reactFlowInstance, hasLoadedWorkspace]);
 
+  // 为现有边添加箭头
+  const updateExistingEdgesWithArrows = useCallback(() => {
+    setEdges((eds) => 
+      eds.map(edge => ({
+        ...edge,
+        markerEnd: edge.markerEnd || {
+          type: MarkerType.ArrowClosed,
+          width: 20,
+          height: 20,
+          color: '#4b5563'
+        }
+      }))
+    );
+  }, [setEdges]);
+
   // 连接节点
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
+    (params: Connection) => {
+      const newEdge = {
+        ...params,
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 20,
+          height: 20,
+          color: '#4b5563' // 使用CSS变量对应的颜色值
+        }
+      };
+      setEdges((eds) => addEdge(newEdge, eds));
+    },
     [setEdges]
   );
+
+  // 为已加载的边添加箭头
+  useEffect(() => {
+    if (hasLoadedWorkspace && edges.length > 0) {
+      updateExistingEdgesWithArrows();
+    }
+  }, [hasLoadedWorkspace, updateExistingEdgesWithArrows]);
 
   // 节点选择
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
@@ -471,7 +506,9 @@ const Workspace: React.FC = () => {
           <Content className="relative">
             {isLoadingProject ? (
               <div className="flex justify-center items-center h-full">
-                <Spin size="large" tip="加载项目数据中..." />
+                <Spin size="large" tip="加载项目数据中...">
+                  <div className="w-full h-64" />
+                </Spin>
               </div>
             ) : loadError ? (
               <div className="flex flex-col justify-center items-center h-full space-y-4">

@@ -605,3 +605,26 @@ code {
     left: 100%;
   }
 }
+
+/* ReactFlow 箭头样式 */
+.react-flow__edge .react-flow__edge-path {
+  stroke: var(--border-gray-600) !important;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--primary-color) !important;
+}
+
+/* 箭头标记样式 */
+.react-flow svg defs marker polygon {
+  fill: var(--border-gray-600) !important;
+}
+
+.react-flow__edge.selected svg defs marker polygon {
+  fill: var(--primary-color) !important;
+}
+
+/* 确保箭头在不同缩放级别下清晰显示 */
+.react-flow svg defs marker {
+  overflow: visible;
+}

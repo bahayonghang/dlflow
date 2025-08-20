@@ -12,7 +12,7 @@ import {
   Col,
   Typography,
   Dropdown,
-  message,
+  App,
   Empty,
   Spin
 } from 'antd';
@@ -53,6 +53,7 @@ interface ProjectFormData {
 }
 
 const ProjectManagement: React.FC = () => {
+  const { message } = App.useApp();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);

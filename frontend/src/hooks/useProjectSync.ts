@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { message } from 'antd';
+import { App } from 'antd';
 import { Node, Edge } from 'reactflow';
 
 interface ProjectInfo {
@@ -28,6 +28,7 @@ interface UseProjectSyncReturn {
 }
 
 export const useProjectSync = (): UseProjectSyncReturn => {
+  const { message } = App.useApp();
   const [projectInfo, setProjectInfo] = useState<ProjectInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);

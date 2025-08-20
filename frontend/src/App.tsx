@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Layout, Menu, Typography, Avatar, Dropdown, Space, Button, theme } from 'antd';
+import { Layout, Menu, Typography, Avatar, Dropdown, Space, Button, theme, App as AntdApp } from 'antd';
 import {
   FolderOutlined,
   HistoryOutlined,
@@ -262,7 +262,11 @@ const AppContent: React.FC = () => {
 
 // 主App组件
 const App: React.FC = () => {
-  return <AppContent />;
+  return (
+    <AntdApp>
+      <AppContent />
+    </AntdApp>
+  );
 };
 
 export default App;
